@@ -20,8 +20,8 @@ String thingsboardAddress = "http://thingsboard.cloud";
 String accessToken        = "alumnos2024";
 String telemetryEndpoint  = "/api/v1/" + accessToken + "/telemetry";
 
-// RS, EN, D4, D5, D6, D7
-LiquidCrystal lcd(12, 11, 5, 4, 3, 2);
+//               RS, EN, D4, D5, D6, D7
+LiquidCrystal lcd(15, 2, 19, 18, 5, 4);
 
 float altitud     = NAN;
 float humedad     = NAN;
@@ -56,6 +56,7 @@ void connect()
 
     while (wifiMulti.run(10000) != WL_CONNECTED)
     {
+        digitalWrite(LED_BUILTIN, cont % 2);
         if (cont++ % 2)
             printAt(0, 0, "Conectando al wifi..");
         else
@@ -89,8 +90,13 @@ void setup()
 {
     Serial.begin(115200);
     delay(200);
+    Serial.println("ESTACION INICIANDO...");
 
-    lcd.begin(16, 4);
+    pinMode(LED_BUILTIN, OUTPUT);
+    digitalWrite(LED_BUILTIN, HIGH);
+
+    // Inicializo el LCD
+    lcd.begin(16, 2);
     lcd.clear();
     printAt(0, 0, "ESTACION -----------");
     printAt(0, 1, "------ METEOLOLOGICA");
@@ -114,11 +120,14 @@ void LeerValores()
     sensacion   = random(20, 26);
     temperatura = random(20, 26);
     viento      = random(0, 15);
-    direccion   = (360.0 / 16.0) * random(0, 15);
+    direccion   = random(0, 15);  // solo 16 valores!!
 }
 
 void SendData()
 {
+    // paso la direccion a grados entre 0 y 360°.
+    float fdir = (360.0 / 16.0) * direccion;
+
     String payload = String("{") +                                     //
                      "\"altitud\":" + String(altitud) + "," +          //
                      "\"humedad\":" + String(humedad) + "," +          //
@@ -127,7 +136,7 @@ void SendData()
                      "\"sensacion\":" + String(sensacion) + "," +      //
                      "\"temperatura\":" + String(temperatura) + "," +  //
                      "\"viento\":" + String(viento) + "," +            //
-                     "\"direccion\":" + String(direccion)              //
+                     "\"direccion\":" + String(fdir)                   //
                      + "}";
 
     Serial.println("Sending data to ThingsBoard: " + payload);
@@ -138,7 +147,8 @@ void SendData()
     if (httpCode > 0)
     {
         String response = http.getString();
-        Serial.println("Server response: " + response);
+        Serial.print("Server response: ");
+        Serial.println(response);
     }
     else
     {
@@ -149,12 +159,17 @@ void SendData()
 
 void ActualizarDisplay()
 {
+    if (isnan(altitud) || isnan(humedad) || isnan(lluvia) || isnan(presion) || isnan(temperatura) || isnan(sensacion) || isnan(viento) || direccion == -1)
+    {
+        return;  // todavia no hay valores, no ensuciar el dashboard de thingsboard!
+    }
+
     // printAt(0, 0, "PRESION 1016.5 kPa  ");
     // printAt(0, 1, "HUM 55%  LLUVIA 0mm ");
     // printAt(0, 2, "TEMP 35°C  SENS 34°C");
     // printAt(0, 3, "VIENTO NE a 33Km/h  ");
 
-    char buf[21];
+    char buf[100];
     lcd.clear();
 
     sprintf(buf, "PRESION %4.1f kPa ", presion);
