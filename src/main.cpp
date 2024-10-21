@@ -27,7 +27,7 @@
 
 #define PIN_BARO_SDA    21  // I2C para el barometro
 #define PIN_BARO_SCL    22
-#define PIN_DHT11       33  // temperatura y humedad
+#define PIN_DHT11       16  // temperatura y humedad
 #define PIN_PLUVIOMETRO 17  // sensor del pluviometro (opto)
 #define PIN_VELETA_A    19  // optos de la veleta (son 4 optos)
 #define PIN_VELETA_B    18
