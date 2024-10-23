@@ -15,7 +15,7 @@
 #include <SimpleDHT.h>
 
 // Si no está conectado el barometro explota todo!
-// #define USAR_BAROMETRO
+#define USAR_BAROMETRO
 
 #ifdef USAR_BAROMETRO
     #include <Adafruit_MPL3115A2.h>
@@ -42,7 +42,16 @@
 #define PIN_LCD_D7      32
 
 // La cantidad de pulsos por segundos será proporcional a la velocidad del viento.
-#define CONSTANTE_DE_VIENTO 1.0
+// La velocidad del viento Vv en metros por segundo (m/s) es aproximadamente:
+//   Vv ~ 0.00167552 * pulsos por segundo del opto.
+#define CONSTANTE_DE_VIENTO 0.167552f
+/*
+ Se calcula asi:
+ -radio de las copas = 8cm (0.008m)
+ -cantidad de agujeros del opto=30
+ -p=pulsos por segundo medidos en el opto
+ Vv = (2 * PI * 0.008 * p) / 30
+*/
 
 WiFiClient client;
 HTTPClient http;
@@ -183,12 +192,14 @@ void LeerValores()
     // calculo la velocidad del viento segun el tiempo que tardo entre la lectura actual y la anterior, y la cantidad de pulsos ingresados.
     static unsigned long tiempoAnterior = 0;
     unsigned long tiempoActual          = millis();
-    int diff                            = tiempoActual - tiempoAnterior;
+    int Tdiff                           = tiempoActual - tiempoAnterior;
     tiempoAnterior                      = tiempoActual;
-    if (diff > 0)
+    if (Tdiff > 0)
     {
-        viento = ((float)ContadorAnemometro * CONSTANTE_DE_VIENTO) / (float)diff;
+        float vientoMetrosPorSeg = 1000 * ((float)ContadorAnemometro * CONSTANTE_DE_VIENTO) / (float)Tdiff;
+        viento                   = vientoMetrosPorSeg * 3.6;
     }
+    Serial.printf(">>> Velocidad del viento: %.1f km/h, pulsos: %d, tiempo: %d", viento, ContadorAnemometro, Tdiff);
     Serial.print("** ContadorAnemometro: ");
     Serial.println(ContadorAnemometro);
     ContadorAnemometro = 0;
@@ -204,6 +215,11 @@ void LeerValores()
     }
     else
     {
+        Serial.print("DHT 11 OK: temperature=");
+        Serial.print(temperature);
+        Serial.print(" humidity=");
+        Serial.println(humidity);
+
         temperaturaDHT = (float)temperature;
         humedad        = (float)humidity;
     }
