@@ -161,6 +161,59 @@ void connect()
 
 void LeerValores()
 {
+    lluvia = digitalRead(PIN_LLUVIA);
+if ( PIN_LLUVIA == LOW){
+    
+}
+
+    // calculo la velocidad del viento segun el tiempo que tardo entre la lectura actual y la anterior, y la cantidad de pulsos ingresados.
+    static unsigned long tiempoAnterior = 0;
+    unsigned long tiempoActual          = millis();
+    int Tdiff                           = tiempoActual - tiempoAnterior;
+    tiempoAnterior                      = tiempoActual;
+    if (Tdiff > 0)
+    {
+        float vientoMetrosPorSeg = 1000 * ((float)ContadorAnemometro * CONSTANTE_DE_VIENTO) / (float)Tdiff;
+        viento                   = vientoMetrosPorSeg * 3.6;
+    }
+    Serial.printf(">>> Velocidad del viento: %.1f km/h, pulsos: %d, tiempo: %d", viento, ContadorAnemometro, Tdiff);
+    Serial.print("** ContadorAnemometro: ");
+    Serial.println(ContadorAnemometro);
+    ContadorAnemometro = 0;
+
+    static unsigned long Tcont = 0;
+    if (++Tcont > 6)
+    {
+        Tcont = 0;
+
+#ifdef USAR_BAROMETRO
+        // sensor de presion y otras yerbas:
+        presion        = baro.getPressure();
+        altitud        = baro.getAltitude();
+        temperaturaMPL = baro.getTemperature();
+#endif
+
+        // leo temepratura del DHT11: esto aplica retraso en la lectura de sensores! ojo!
+        byte temperature = 0;
+        byte humidity    = 0;
+        if (dht11.read(&temperature, &humidity, NULL) != SimpleDHTErrSuccess)
+        {
+            Serial.println("*** Read DHT11 failed!!");
+            temperaturaDHT = NAN;
+            humedad        = NAN;
+        }
+        else
+        {
+            Serial.print("DHT 11 OK: temperature=");
+            Serial.print(temperature);
+            Serial.print(" humidity=");
+            Serial.println(humidity);
+
+            temperaturaDHT = (float)temperature;
+            humedad        = (float)humidity;
+        }
+    }
+
     // Sensacion termica:
     // https://es.planetcalc.com/2087/
     // (viento en km/h)
@@ -179,50 +232,6 @@ void LeerValores()
     rocio         = (b * ((aT / bT) + log(humNorm))) / (a - (aT / bT) + log(humNorm));
     Serial.print("** Punto de condensación: ");
     Serial.println(rocio);
-
-    lluvia = random(0, 99) * 1.1;
-
-#ifdef USAR_BAROMETRO
-    // sensor de presion y otras yerbas:
-    presion        = baro.getPressure();
-    altitud        = baro.getAltitude();
-    temperaturaMPL = baro.getTemperature();
-#endif
-
-    // calculo la velocidad del viento segun el tiempo que tardo entre la lectura actual y la anterior, y la cantidad de pulsos ingresados.
-    static unsigned long tiempoAnterior = 0;
-    unsigned long tiempoActual          = millis();
-    int Tdiff                           = tiempoActual - tiempoAnterior;
-    tiempoAnterior                      = tiempoActual;
-    if (Tdiff > 0)
-    {
-        float vientoMetrosPorSeg = 1000 * ((float)ContadorAnemometro * CONSTANTE_DE_VIENTO) / (float)Tdiff;
-        viento                   = vientoMetrosPorSeg * 3.6;
-    }
-    Serial.printf(">>> Velocidad del viento: %.1f km/h, pulsos: %d, tiempo: %d", viento, ContadorAnemometro, Tdiff);
-    Serial.print("** ContadorAnemometro: ");
-    Serial.println(ContadorAnemometro);
-    ContadorAnemometro = 0;
-
-    // leo temepratura del DHT11: esto aplica retraso en la lectura de sensores! ojo!
-    byte temperature = 0;
-    byte humidity    = 0;
-    if (dht11.read(&temperature, &humidity, NULL) != SimpleDHTErrSuccess)
-    {
-        Serial.println("*** Read DHT11 failed!!");
-        temperaturaDHT = NAN;
-        humedad        = NAN;
-    }
-    else
-    {
-        Serial.print("DHT 11 OK: temperature=");
-        Serial.print(temperature);
-        Serial.print(" humidity=");
-        Serial.println(humidity);
-
-        temperaturaDHT = (float)temperature;
-        humedad        = (float)humidity;
-    }
 
     // calculo la veleta segun los pines seteados:
     direccion = digitalRead(PIN_VELETA_A) | (digitalRead(PIN_VELETA_B) << 1) | (digitalRead(PIN_VELETA_C) << 2) | (digitalRead(PIN_VELETA_D) << 3);
@@ -278,10 +287,14 @@ void SendData()
     }
     if (direccion != -1)
     {
+        //                          0      1      2       3      4      5      6    7    8    9   10   11   12   13   14   15
+        static float rosa[16] = {0, 337.5, 180, 157.5, 315, 292.5, 135, 112.5, 270, 247.5, 90, 67.5, 225, 202.5, 45, 22.5};
+        //                    {"  N", "NNO", "  S", "SSE", " NO", "ONO", " SE", "ESE", "  O", "OSO", "  E", "ENE", " SO", "SSO", " NE", "NNE"};
+
         // paso la direccion a grados entre 0 y 360°.
-        float fdir = (360.0 / 16.0) * direccion;
+        // float fdir = (360.0 / 16.0) * direccion;
         if (S.length() > 1) S += ",";
-        S += "\"direccion\":" + String(fdir);
+        S += "\"direccion\":" + String(rosa[direccion]);
     }
     S += "}";
 
@@ -317,7 +330,8 @@ void ActualizarDisplay()
         1000 - SUROESTE
         0001 - NOROESTE
     */
-    static String rosa[16] = {"  N", "NNW", "  S", "SSE", " NW", "WNW", " SE", "ESE", "  W", "WSW", "  E", "ENE", " SW", "SSW", " NE", "NNE"};
+    //                          0      1      2       3      4      5      6    7    8    9   10   11   12   13   14   15
+    static String rosa[16] = {"  N", "NNO", "  S", "SSE", " NO", "ONO", " SE", "ESE", "  O", "OSO", "  E", "ENE", " SO", "SSO", " NE", "NNE"};
 
     // +--------------------+
     // |Alt  Pres   Hum Lluv|
@@ -406,15 +420,16 @@ void setup()
 
 void loop()
 {
-    static unsigned long T = 0;
-    if (millis() - T > 1000)
-    {
-        T = millis();  // cada 1 segundo....
+    // static unsigned long T = 0;
+    // if (millis() - T > 1000)
+    // {
+    //     T = millis();  // cada 1 segundo....
 
-        LeerValores();
-        ActualizarDisplay();
-        SendData();
-    }
+    LeerValores();
+    ActualizarDisplay();
+    SendData();
+    delay(200);
+    // }
 
     // intenta reconectarse cada vez que no este conectado.
     if (WiFi.status() != WL_CONNECTED)
