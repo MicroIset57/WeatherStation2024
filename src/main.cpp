@@ -45,6 +45,7 @@
 // La velocidad del viento Vv en metros por segundo (m/s) es aproximadamente:
 //   Vv ~ 0.00167552 * pulsos por segundo del opto.
 #define CONSTANTE_DE_VIENTO 0.167552f
+#define CONSTANTE_DE_LLUVIA 10.0  // mm de agua por cada pulso del pluviometro
 /*
  Se calcula asi:
  -radio de las copas = 8cm (0.008m)
@@ -80,11 +81,25 @@ float humedad        = NAN;
 float viento         = NAN;  // anemometro
 int direccion        = -1;   // rosa de los vientos
 
-// ANEMOMETRO : Centa pulsos por interrupcion
+// ANEMOMETRO : Cuenta pulsos por interrupcion
 // En cada pulso de la veleta se cuenta un pulso.
 // Luego calculamos la velocidad como si fuera un frecuencímetro. (pulsos por segundo)
 volatile int ContadorAnemometro = 0;
 void IRAM_ATTR contarPulso() { ContadorAnemometro++; }
+
+volatile unsigned long T15             = 0;
+volatile int ContadorPluviometro       = 0;
+volatile int ContadorPluviometroX15Seg = 0;
+void IRAM_ATTR contarPluvio()
+{
+    if (T15 < millis())
+    {
+        T15                       = millis() + 15000;
+        ContadorPluviometroX15Seg = ContadorPluviometro;
+        ContadorPluviometro       = 0;
+    }
+    ContadorPluviometro++;
+}
 
 // Imprime una linea completa, verifica que no exceda el tamaño de 20 chars!
 // Si existe el char ° lo reemplaza por el especial.
@@ -161,13 +176,9 @@ void connect()
 
 void LeerValores()
 {
-    lluvia = digitalRead(PIN_LLUVIA);
-if ( PIN_LLUVIA == LOW){
-    
-}
-
     // calculo la velocidad del viento segun el tiempo que tardo entre la lectura actual y la anterior, y la cantidad de pulsos ingresados.
     static unsigned long tiempoAnterior = 0;
+    static unsigned long quinceSeg      = 0;
     unsigned long tiempoActual          = millis();
     int Tdiff                           = tiempoActual - tiempoAnterior;
     tiempoAnterior                      = tiempoActual;
@@ -180,6 +191,12 @@ if ( PIN_LLUVIA == LOW){
     Serial.print("** ContadorAnemometro: ");
     Serial.println(ContadorAnemometro);
     ContadorAnemometro = 0;
+
+    lluvia = ContadorPluviometroX15Seg * CONSTANTE_DE_LLUVIA;
+    Serial.printf(">>> Lluvia: %f", lluvia);
+    Serial.print("** ContadorPluviometro: ");
+    // Serial.println(ContadorPluviometro);
+    // ContadorPluviometro = 0;
 
     static unsigned long Tcont = 0;
     if (++Tcont > 6)
@@ -384,6 +401,9 @@ void setup()
 
     // vamos a leer el anemometro mediante interrupciones (solo contamos pulsos)
     attachInterrupt(digitalPinToInterrupt(PIN_ANEMOMETRO), contarPulso, RISING);
+
+    // vamos a leer el pluviometro mediante interrupciones
+    attachInterrupt(digitalPinToInterrupt(PIN_PLUVIOMETRO), contarPluvio, RISING);
 
 // iniciamos el barometro MPL3115A2
 #ifdef USAR_BAROMETRO
